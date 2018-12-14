@@ -1,0 +1,136 @@
+#! /usr/bin/python
+import os
+import sys
+import csv
+import pyasn
+import json
+from ipaddress import ip_network
+from collections import defaultdict
+
+bgpdb = None
+
+def slash_24_of(ip_str):
+    dots = ip_str.strip().split('.')
+    dots[-1] = '0/24'
+    return str(ip_network('.'.join(dots)))
+
+def bgp_prfx_of(ip_str):
+    _, prfx = bgpdb.lookup(ip_str)
+    return prfx
+
+def asn_of(ip_str):
+    asn, _ = bgpdb.lookup(ip_str)
+    return asn
+
+def ingr_lookup(hops, dnet, dnet_lookup):
+    ingr = None
+    for i, h in enumerate(hops):
+        if dnet_lookup(h) == dnet:
+            return h, i + 1  
+    return None, None
+
+if __name__ == '__main__':
+
+    ARGC = 5
+    if len(sys.argv) < ARGC:
+        exit("Usage: evaluate_results_dir <probe_dir> <results_dir> <K> <dnet_type> <opt: ipasn_file> ")
+
+    probe_dir = sys.argv[1]
+    results_dir = sys.argv[2]
+    K = int(sys.argv[3])
+    dnet_type = sys.argv[4]
+    ipasn_file = sys.argv[5] if len(sys.argv) > 5 else None
+
+    if dnet_type not in ['bgp', 'asn', 'slash_24']:
+        exit('Illegal dnet type: \'{}\''.format(dnet_type))
+    if dnet_type != 'slash_24':
+        bgpdb = pyasn.pyasn(ipasn_file)
+
+    dnet_lookup = slash_24_of
+    if dnet_type == 'asn':
+        dnet_lookup = asn_of
+    if dnet_type == 'bgp':
+        dnet_lookup = bgp_prfx_of
+
+    vp_dist_by_dest = defaultdict(list)
+    for csv_name in os.listdir(probe_dir):
+        vp = csv_name.replace('.csv', '')
+
+        with open(os.path.join(probe_dir, csv_name), 'r') as f:
+            for line in f:
+                chunks = line.strip().split(',')
+                dnet = chunks[0]
+                dest = chunks[1]
+                dist = chunks[2:].index(dest) + 1 if chunks[1] in chunks[2:] else -1
+                
+                if '$' in dest:
+                    sys.stderr.write(csv_name)
+                vp_dist_by_dest[dest].append((vp, dist))
+
+    # with open(dist_by_dest_file, 'r') as f:
+        # vp_dist_by_dest = json.load(f)
+
+    set_cover_ranking = []
+    with open(os.path.join(results_dir, "set_cover", "set_cover_results.txt"), 'r') as f:
+        j = 0
+        for i, line in enumerate(f):
+            if line[0] == '#':
+                j += 1
+                continue
+            if K > i - j + 1:
+                break
+            set_cover_ranking.append(line.strip().split()[0])
+
+    ingr_rankings_by_dnet = {}
+    with open(os.path.join(results_dir, "ingress_cover", dnet_type, 'rankings_by_dnet.csv'), 'r') as f:
+        for line in f:
+            for row in csv.reader(f):
+                ingr_rankings_by_dnet[row[0]] = row[1:]
+
+    dst_rankings_by_dnet = {}
+    with open(os.path.join(results_dir, "destination_cover", dnet_type, 'rankings_by_dnet.csv'), 'r') as f:
+        for line in f:
+            for row in csv.reader(f):
+                dst_rankings_by_dnet[row[0]] = row[1:]
+    sys.stderr.write('{}\n'.format(len(dst_rankings_by_dnet)))
+
+    print('# <destination>,<optimal_vp>,<optimal_dist>,<ingr_vp>,<ingr_dist>,<set_vp>,<set_dist>,<dest_vp>,<dest_dist>')
+    bad = 0
+    for dest, vp_dist in vp_dist_by_dest.items():
+        opt = [elem for elem in sorted(vp_dist, key=lambda x: int(x[1]) if int(x[1]) > 0 else 10)][0]
+        sys.stdout.write('{},{},{}'.format(dest, opt[0], opt[1]))
+
+       
+        dists = {vp: dist for vp, dist in vp_dist}
+        try:
+            dnet = dnet_lookup(dest)
+        except:
+            sys.stderr.write('\n\n***************{}\n{}\n****************'.format(dest, vp_dist))
+            exit()
+        found = False
+        if dnet in ingr_rankings_by_dnet:
+            for vp in ingr_rankings_by_dnet[dnet]:
+                if vp in dists and dists[vp] > -1:
+                    sys.stdout.write('{},{}'.format(vp, dists[vp]))
+                    found = True
+                    break
+            if not found:
+                sys.stdout.write(',,')
+        else:
+            sys.stdout.write(',,')
+            bad += 1
+
+        found = False
+        if vp in dst_rankings_by_dnet:
+            for vp in dst_rankings_by_dnet[dnet]:
+                if vp in dists and dists[vp] > -1:
+                    sys.stdout.write('{},{}'.format(vp, dists[vp]))
+                    found = True
+                    break
+            if not found:
+                sys.stdout.write(',,')
+        else :
+            bad +=1
+            sys.stdout.write(',,')
+        sys.stdout.write('\n')
+    sys.stderr.write('{}\n'.format(bad))

@@ -1,0 +1,48 @@
+#! /usr/bin/python3
+
+import os
+import sys
+from collections import defaultdict
+import pickle
+
+if len(sys.argv) != 3:
+    exit('Usage: rank_vps_destination_cover <dsts_by_dnet_file> <meas_dir>')
+
+dsts_by_dnet_file = sys.argv[1]
+measurements_dir  = sys.argv[2]
+
+with open(dsts_by_dnet_file, 'rb') as f:
+    dsts_by_dnet = pickle.load(f)
+
+dsts_by_vp_by_dnet = defaultdict(lambda: defaultdict(set))
+for vp_csv in os.listdir(measurements_dir):
+    vp = vp_csv.replace('.csv', '')
+    with open(os.path.join(measurements_dir, vp_csv), 'r') as f:
+        for line in f:
+            chunks = line.strip().split(',')
+            dnet = chunks[0]
+            dst = chunks[1]
+            dsts_by_vp_by_dnet[dnet][vp].add(chunks[1])
+
+for dnet, remaining_dsts in dsts_by_dnet.items():
+
+    vp_ranking = []
+    while(len(remaining_dsts) > 0):
+
+        max_coverage = 0
+        chosen_vp = ''
+        for vp, covered_dsts in dsts_by_vp_by_dnet[dnet].items():
+
+            this_coverage = len(covered_dsts & remaining_dsts)
+
+            if this_coverage > max_coverage:
+                chosen_vp = vp
+                chosen_dsts = covered_dsts
+                max_coverage = this_coverage
+
+        vp_ranking.append(chosen_vp)
+        remaining_dsts -= chosen_dsts
+
+        del dsts_by_vp_by_dnet[dnet][chosen_vp]
+
+    print('{},{}'.format(dnet, ','.join(vp_ranking)))

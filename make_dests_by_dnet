@@ -1,0 +1,19 @@
+#! /usr/bin/python3
+
+import os
+import sys
+import pickle
+from collections import defaultdict
+
+probe_dir = sys.argv[1]
+dests_by_dnet = defaultdict(set)
+for fname in os.listdir(probe_dir):
+    with open(os.path.join(probe_dir, fname), 'r') as f:
+        for line in f:
+            chunks = line.strip().split(',')
+            dnet = chunks[0]
+            dest = chunks[1]
+            dests_by_dnet[dnet].add(dest)
+
+with open(sys.argv[2], 'wb+') as f:
+    pickle.dump(dests_by_dnet, f)
