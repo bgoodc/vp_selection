@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from ipaddress import ip_address, ip_network
 import pyasn
-import ujson as json
+import json
 
 bgpdb = None
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     for fname in os.listdir(probe_dir):
 
         vp = fname.replace('.csv', '')
-        print('processing {}...'.format(vp))
+        #print('processing {}...'.format(vp))
 
         with open(os.path.join(probe_dir, fname), 'r') as f:
             for line in f:

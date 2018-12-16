@@ -1,34 +1,31 @@
 #! /usr/bin/python3
 
 import sys
+import csv
 import os
 from collections import defaultdict
 
-if len(sys.argv) < 3:
-    print("usage: cover_reachables.py <global_reachables_file> <reachables_by_vp_dir>")
-    exit()
+if len(sys.argv) < 2:
+    exit("Usage: rank_vps_set_cover <rr_probe_dir>")
 
-global_reach_file = sys.argv[1]
-reachables_by_vp_dir = os.path.abspath(sys.argv[2])
+rr_probe_dir = os.path.abspath(sys.argv[1])
 
 uncovered_reachables = set()
-with open(global_reach_file, 'r') as f:
-    for line in f:
-        uncovered_reachables.add(line.strip())
-tot = len(uncovered_reachables)
-
-
 reachables_by_vp = defaultdict(set)
-for vp_name in os.listdir(reachables_by_vp_dir):
-    with open(os.path.join(reachables_by_vp_dir, vp_name), 'r') as f:
-        for line in f:
-            chunks = line.strip().split(',')
-            reachables_by_vp[vp_name].add(chunks[1])
+for vp_csv in os.listdir(rr_probe_dir):
+    vp_name = vp_csv.replace('.csv', '')
+    with open(os.path.join(rr_probe_dir, vp_csv), 'r') as f:
+        for row in csv.reader(f):
+            d = row[0]
+            if d in row[1:]:
+                reachables_by_vp[vp_name].add(d)
+                uncovered_reachables.add(d)
 
 print("#VP Chosen\tNumber Reachable Destinations Covered\tFraction of Reachable Destinations Covered\tCumulative Fraction of Reachable Destinations Covered")
 frac = 0.0
 cumfrac = 0.0
 num_covered = 1
+tot = len(uncovered_reachables)
 while len(uncovered_reachables) > 0 and num_covered > 0 and\
         len(reachables_by_vp) > 0:
     num_covered = 0

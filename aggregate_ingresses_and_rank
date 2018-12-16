@@ -1,7 +1,7 @@
 #! /usr/bin/python3
 import sys
 import pickle
-import ujson as json
+import json
 from collections import OrderedDict, defaultdict
 
 def aggregate_ingresses(dists_by_vp_by_ingr, overlap_threshold=0.75):
@@ -74,11 +74,12 @@ if __name__ == '__main__':
         dists_by_vp_by_ingr_by_dnet = json.loads(f.read())
 
     vps_by_ingrt_by_dnet = {}
-    for dnet in dists_by_vp_by_ingr_by_dnet:
-        vps_by_ingrt = aggregate_ingresses(dists_by_vp_by_ingr_by_dnet[dnet])
-        vps_by_ingrt_by_dnet[dnet] = vps_by_ingrt
-        ranked_vps = [vps[0] for vps in vps_by_ingrt.values()]
-        print("{},{}".format(dnet, ','.join(ranked_vps)))
+    with open(sys.argv[2], 'w+') as f:
+        for dnet in dists_by_vp_by_ingr_by_dnet:
+            vps_by_ingrt = aggregate_ingresses(dists_by_vp_by_ingr_by_dnet[dnet])
+            vps_by_ingrt_by_dnet[dnet] = vps_by_ingrt
+            ranked_vps = [vps[0] for vps in vps_by_ingrt.values()]
+            f.write("{},{}\n".format(dnet, ','.join(ranked_vps)))
 
-    with open(sys.argv[2], 'wb+') as f:
-        pickle.dump(vps_by_ingrt_by_dnet, f)
+    #with open(sys.argv[2], 'wb+') as f:
+    #    pickle.dump(vps_by_ingrt_by_dnet, f)
